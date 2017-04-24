@@ -1,7 +1,7 @@
 # dcgan_vae_pytorch
 dcgan combined with vae in pytorch!
 
-this code os based on [pytorch/examples/dcgan](https://github.com/pytorch/examples/tree/master/dcgan) and [staturecrane/dcgan_vae_torch](https://github.com/staturecrane/dcgan_vae_torch)
+this code is based on [pytorch/examples/dcgan](https://github.com/pytorch/examples/tree/master/dcgan) and [staturecrane/dcgan_vae_torch](https://github.com/staturecrane/dcgan_vae_torch)
 
 ## Requirements
 * torch
