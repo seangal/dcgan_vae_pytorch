@@ -108,41 +108,27 @@ def weights_init(m):
 class _Sampler(nn.Module):
     def __init__(self):
         super(_Sampler, self).__init__()
-        '''
-        self.epsilonModule = lnn.Sequential()
-        self.epsilonModule.add(lnn.MulConstant(0))
-        self.epsilonModule.add(lnn.WhiteNoise(0, 0.01))
-
-        self.noiseModule = lnn.Sequential()
-        self.noiseModuleInternal = lnn.ConcatTable()
-        self.stdModule = lnn.Sequential()
-        self.stdModule.add(lnn.MulConstant(0.5)) # Compute 1/2 log σ^2 = log σ
-        self.stdModule.add(lnn.Exp()) # Compute σ
-        self.noiseModuleInternal.add(self.stdModule) # Standard deviation σ
-        self.noiseModuleInternal.add(self.epsilonModule) # Sample noise ε
-        self.noiseModule.add(self.noiseModuleInternal)
-        self.noiseModule.add(lnn.CMulTable())
-
-        self.sampler = lnn.Sequential()
-        self.samplerInternal = lnn.ParallelTable()
-        self.samplerInternal.add(lnn.Identity())
-        self.samplerInternal.add(self.noiseModule)
-        self.sampler.add(self.samplerInternal)
-        self.sampler.add(lnn.CAddTable())
-        '''
+        
     def forward(self,input):
-        output = input
-        return output
+        mu = input[0]
+        logvar = input[1]
+        
+        std = logvar.mul(0.5).exp_() #calculate the STDEV
+        if opt.cuda:
+            eps = torch.cuda.FloatTensor(std.size()).normal_() #random normalized noise
+        else:
+            eps = torch.FloatTensor(std.size()).normal_() #random normalized noise
+        eps = Variable(eps)
+        return eps.mul(std).add_(mu) 
 
 
 class _Encoder(nn.Module):
     def __init__(self):
         super(_Encoder, self).__init__()
-        '''
-        self.ct = lnn.ConcatTable()
-        self.ct.add(nn.Conv2d(ngf * 8, nz, 4))
-        self.ct.add(nn.Conv2d(ngf * 8, nz, 4))
-        '''
+        
+        self.conv1 = nn.Conv2d(ngf * 8, nz, 4)
+        self.conv2 = nn.Conv2d(ngf * 8, nz, 4)
+        
         self.encoder = nn.Sequential(
             # input is (nc) x 64 x 64
             nn.Conv2d(nc, ngf, 4, 2, 1, bias=False),
@@ -166,7 +152,7 @@ class _Encoder(nn.Module):
 
     def forward(self,input):
         output = self.encoder(input)
-        return output;
+        return [self.conv1(output),self.conv2(output)]
 
 
 class _netG(nn.Module):
