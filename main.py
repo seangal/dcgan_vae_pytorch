@@ -184,18 +184,17 @@ class _netG(nn.Module):
             # state size. (nc) x 64 x 64
         )
 
-        self.main = nn.Sequential(
-            self.encoder,
-            #self.sampler,
-            self.decoder
-        )
-
     def forward(self, input):
         if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.encoder, input, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.sampler, output, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.decoder, output, range(self.ngpu))
         else:
-            output = self.main(input)
+            output = self.encoder(input)
+            output = self.sampler(output)
+            output = self.decoder(output)
         return output
+    
     def make_cuda(self):
         self.encoder.cuda()
         self.sampler.cuda()
