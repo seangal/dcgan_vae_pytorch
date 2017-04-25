@@ -307,7 +307,7 @@ for epoch in range(opt.niter):
         ############################
         # (2) Update G network: VAE
         ###########################
-        print(input.size())
+        
         encoded = netG.encoder(input)
         mu = encoded[0]
         logvar = encoded[1]
