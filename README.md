@@ -13,7 +13,7 @@ this code is based on [pytorch/examples/dcgan](https://github.com/pytorch/exampl
 ```
 usage: main.py [-h] --dataset DATASET --dataroot DATAROOT [--workers WORKERS]
                [--batchSize BATCHSIZE] [--imageSize IMAGESIZE] [--nz NZ]
-               [--ngf NGF] [--ndf NDF] [--niter NITER] [--lr LR]
+               [--ngf NGF] [--ndf NDF] [--niter NITER] [--saveInt SAVEINT] [--lr LR]
                [--beta1 BETA1] [--cuda] [--ngpu NGPU] [--netG NETG]
                [--netD NETD]
 
@@ -30,6 +30,7 @@ optional arguments:
   --ngf NGF
   --ndf NDF
   --niter NITER         number of epochs to train for
+  --saveInt SAVEINT     number of epochs between checkpoints
   --lr LR               learning rate, default=0.0002
   --beta1 BETA1         beta1 for adam. default=0.5
   --cuda                enables cuda
