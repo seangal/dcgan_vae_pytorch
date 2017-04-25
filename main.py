@@ -108,41 +108,27 @@ def weights_init(m):
 class _Sampler(nn.Module):
     def __init__(self):
         super(_Sampler, self).__init__()
-        '''
-        self.epsilonModule = lnn.Sequential()
-        self.epsilonModule.add(lnn.MulConstant(0))
-        self.epsilonModule.add(lnn.WhiteNoise(0, 0.01))
-
-        self.noiseModule = lnn.Sequential()
-        self.noiseModuleInternal = lnn.ConcatTable()
-        self.stdModule = lnn.Sequential()
-        self.stdModule.add(lnn.MulConstant(0.5)) # Compute 1/2 log σ^2 = log σ
-        self.stdModule.add(lnn.Exp()) # Compute σ
-        self.noiseModuleInternal.add(self.stdModule) # Standard deviation σ
-        self.noiseModuleInternal.add(self.epsilonModule) # Sample noise ε
-        self.noiseModule.add(self.noiseModuleInternal)
-        self.noiseModule.add(lnn.CMulTable())
-
-        self.sampler = lnn.Sequential()
-        self.samplerInternal = lnn.ParallelTable()
-        self.samplerInternal.add(lnn.Identity())
-        self.samplerInternal.add(self.noiseModule)
-        self.sampler.add(self.samplerInternal)
-        self.sampler.add(lnn.CAddTable())
-        '''
+        
     def forward(self,input):
-        output = input
-        return output
+        mu = input[0]
+        logvar = input[1]
+        
+        std = logvar.mul(0.5).exp_() #calculate the STDEV
+        if opt.cuda:
+            eps = torch.cuda.FloatTensor(std.size()).normal_() #random normalized noise
+        else:
+            eps = torch.FloatTensor(std.size()).normal_() #random normalized noise
+        eps = Variable(eps)
+        return eps.mul(std).add_(mu) 
 
 
 class _Encoder(nn.Module):
     def __init__(self):
         super(_Encoder, self).__init__()
-        '''
-        self.ct = lnn.ConcatTable()
-        self.ct.add(nn.Conv2d(ngf * 8, nz, 4))
-        self.ct.add(nn.Conv2d(ngf * 8, nz, 4))
-        '''
+        
+        self.conv1 = nn.Conv2d(ngf * 8, nz, 4)
+        self.conv2 = nn.Conv2d(ngf * 8, nz, 4)
+        
         self.encoder = nn.Sequential(
             # input is (nc) x 64 x 64
             nn.Conv2d(nc, ngf, 4, 2, 1, bias=False),
@@ -160,13 +146,11 @@ class _Encoder(nn.Module):
             nn.BatchNorm2d(ngf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ngf*8) x 4 x 4
-            nn.Conv2d(ngf * 8, nz, 4)
-            #self.ct
         )
 
     def forward(self,input):
         output = self.encoder(input)
-        return output;
+        return [self.conv1(output),self.conv2(output)]
 
 
 class _netG(nn.Module):
@@ -198,23 +182,21 @@ class _netG(nn.Module):
             # state size. (nc) x 64 x 64
         )
 
-        self.main = nn.Sequential(
-            self.encoder,
-            #self.sampler,
-            self.decoder
-        )
-
     def forward(self, input):
         if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.encoder, input, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.sampler, output, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.decoder, output, range(self.ngpu))
         else:
-            output = self.main(input)
+            output = self.encoder(input)
+            output = self.sampler(output)
+            output = self.decoder(output)
         return output
+    
     def make_cuda(self):
         self.encoder.cuda()
         self.sampler.cuda()
         self.decoder.cuda()
-        self.main.cuda()
 
 netG = _netG(ngpu)
 netG.apply(weights_init)
@@ -264,7 +246,7 @@ if opt.netD != '':
 print(netD)
 
 criterion = nn.BCELoss()
-VAECriterion = nn.MSELoss()
+MSECriterion = nn.MSELoss()
 
 input = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
 noise = torch.FloatTensor(opt.batchSize, nz, 1, 1)
@@ -277,7 +259,7 @@ if opt.cuda:
     netD.cuda()
     netG.make_cuda()
     criterion.cuda()
-    VAECriterion.cuda()
+    MSECriterion.cuda()
     input, label = input.cuda(), label.cuda()
     noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
 
@@ -326,10 +308,21 @@ for epoch in range(opt.niter):
         # (2) Update G network: VAE
         ###########################
         
-        rec = netG(input)
+        encoded = netG.encoder(input)
+        mu = encoded[0]
+        logvar = encoded[1]
+        
+        KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
+        KLD = torch.sum(KLD_element).mul_(-0.5)
+        
+        sampled = netG.sampler(encoded)
+        rec = netG.decoder(sampled)
         rec_win = vis.image(rec.data[0].cpu()*0.5+0.5,win = rec_win)
-        errVAE = VAECriterion(rec,input)
-        errVAE.backward()
+        
+        MSEerr = MSECriterion(rec,input)
+        
+        VAEerr = KLD + MSEerr;
+        VAEerr.backward()
         optimizerG.step()
 
         ############################
@@ -345,9 +338,9 @@ for epoch in range(opt.niter):
         D_G_z2 = output.data.mean()
         optimizerG.step()
 
-        print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
+        print('[%d/%d][%d/%d] Loss_VAE: %.4f Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
               % (epoch, opt.niter, i, len(dataloader),
-                 errD.data[0], errG.data[0], D_x, D_G_z1, D_G_z2))
+                 VAEerr.data[0], errD.data[0], errG.data[0], D_x, D_G_z1, D_G_z2))
 
     if epoch%opt.saveInt == 0 and epoch!=0:
         torch.save(netG.state_dict(), '%s/netG_epoch_%d.pth' % (opt.outf, epoch))
