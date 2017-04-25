@@ -311,10 +311,21 @@ for epoch in range(opt.niter):
         # (2) Update G network: VAE
         ###########################
         
-        rec = netG(input)
+        encoded = netG.encoder(input)
+        mu = encoded[0]
+        logvar = encoded[1]
+        
+        KLD_element = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
+        KLD = torch.sum(KLD_element).mul_(-0.5)
+        
+        sampled = netG.sampler(encoded)
+        rec = netG.decoder(sampled)
         rec_win = vis.image(rec.data[0].cpu()*0.5+0.5,win = rec_win)
-        errVAE = VAECriterion(rec,input)
-        errVAE.backward()
+        
+        MSEerr = MSECriterion(rec,input)
+        
+        VAEerr = KLD + MSEerr;
+        VAEerr.backward()
         optimizerG.step()
 
         ############################
@@ -330,9 +341,9 @@ for epoch in range(opt.niter):
         D_G_z2 = output.data.mean()
         optimizerG.step()
 
-        print('[%d/%d][%d/%d] Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
+        print('[%d/%d][%d/%d] Loss_VAE: %.4f Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
               % (epoch, opt.niter, i, len(dataloader),
-                 errD.data[0], errG.data[0], D_x, D_G_z1, D_G_z2))
+                 errVAE.data[0], errD.data[0], errG.data[0], D_x, D_G_z1, D_G_z2))
 
     if epoch%opt.saveInt == 0 and epoch!=0:
         torch.save(netG.state_dict(), '%s/netG_epoch_%d.pth' % (opt.outf, epoch))
