@@ -146,8 +146,6 @@ class _Encoder(nn.Module):
             nn.BatchNorm2d(ngf * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # state size. (ngf*8) x 4 x 4
-            nn.Conv2d(ngf * 8, nz, 4)
-            #self.ct
         )
 
     def forward(self,input):
@@ -199,7 +197,6 @@ class _netG(nn.Module):
         self.encoder.cuda()
         self.sampler.cuda()
         self.decoder.cuda()
-        self.main.cuda()
 
 netG = _netG(ngpu)
 netG.apply(weights_init)
@@ -249,7 +246,7 @@ if opt.netD != '':
 print(netD)
 
 criterion = nn.BCELoss()
-VAECriterion = nn.MSELoss()
+MSECriterion = nn.MSELoss()
 
 input = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
 noise = torch.FloatTensor(opt.batchSize, nz, 1, 1)
@@ -262,7 +259,7 @@ if opt.cuda:
     netD.cuda()
     netG.make_cuda()
     criterion.cuda()
-    VAECriterion.cuda()
+    MSECriterion.cuda()
     input, label = input.cuda(), label.cuda()
     noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
 
@@ -310,7 +307,7 @@ for epoch in range(opt.niter):
         ############################
         # (2) Update G network: VAE
         ###########################
-        
+        print(input.size())
         encoded = netG.encoder(input)
         mu = encoded[0]
         logvar = encoded[1]
@@ -343,7 +340,7 @@ for epoch in range(opt.niter):
 
         print('[%d/%d][%d/%d] Loss_VAE: %.4f Loss_D: %.4f Loss_G: %.4f D(x): %.4f D(G(z)): %.4f / %.4f'
               % (epoch, opt.niter, i, len(dataloader),
-                 errVAE.data[0], errD.data[0], errG.data[0], D_x, D_G_z1, D_G_z2))
+                 VAEerr.data[0], errD.data[0], errG.data[0], D_x, D_G_z1, D_G_z2))
 
     if epoch%opt.saveInt == 0 and epoch!=0:
         torch.save(netG.state_dict(), '%s/netG_epoch_%d.pth' % (opt.outf, epoch))
