@@ -11,6 +11,13 @@ The original artical can be found [here](https://arxiv.org/abs/1512.09300)
 * (optional) lmdb
 
 ## Usage
+to start visdom:
+```
+python -m visdom.server
+```
+
+
+to start the training:
 ```
 usage: main.py [-h] --dataset DATASET --dataroot DATAROOT [--workers WORKERS]
                [--batchSize BATCHSIZE] [--imageSize IMAGESIZE] [--nz NZ]
