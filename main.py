@@ -310,6 +310,8 @@ for epoch in range(opt.niter):
         # (2) Update G network: VAE
         ###########################
         
+        netG.zero_grad()
+        
         encoded = netG.encoder(input)
         mu = encoded[0]
         logvar = encoded[1]
@@ -330,7 +332,7 @@ for epoch in range(opt.niter):
         ############################
         # (3) Update G network: maximize log(D(G(z)))
         ###########################
-        netG.zero_grad()
+
         label.data.fill_(real_label)  # fake labels are real for generator cost
 
         rec = netG(input) # this tensor is freed from mem at this point
